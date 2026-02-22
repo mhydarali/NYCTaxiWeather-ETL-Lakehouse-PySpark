@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.uv-bootstrap/
+.uv-cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local lake/log artifacts
+data/
+!data/bronze/.gitkeep
+!data/silver/.gitkeep
+!data/gold/.gitkeep
+logs/
+!logs/.gitkeep
+spark-warehouse/
+metastore_db/
+
+# Generated run artifacts
+RUN_OUTPUTS.txt
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/

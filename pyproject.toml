@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mobility-lakehouse"
+version = "0.1.0"
+description = "Local end-to-end city mobility lakehouse pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pyspark>=3.5,<4.0",
+  "requests>=2.32,<3.0",
+  "pyarrow>=16,<22",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9.0",
+  "ruff>=0.6,<1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mobility_lakehouse"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [".venv", ".uv-bootstrap", ".uv-cache", "data", "logs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E402", "E501"]
