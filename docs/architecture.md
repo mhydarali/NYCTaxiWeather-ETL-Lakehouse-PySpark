@@ -1,8 +1,8 @@
 # Architecture
 
-This project implements a local-first medallion pipeline that mirrors common production data platform patterns.
+This project uses a local medallion pattern (`bronze -> silver -> gold`) with Spark for transformations.
 
-## Canonical Flow
+## End-to-end flow
 
 ```mermaid
 flowchart LR
@@ -19,50 +19,39 @@ flowchart LR
     H --> I["Quality Checks\nscripts/run_quality.py"]
 ```
 
-## Layers
+## Layer contracts
 
-### Bronze
-- `data/bronze/tlc/taxi_type=<yellow|green>/year=YYYY/month=MM/*.parquet`
-  - Raw monthly TLC parquet downloads.
-  - Resumable logic: skip existing non-empty files.
-- `data/bronze/weather/date=YYYY-MM-DD/weather.json`
-  - Raw daily weather JSON.
-  - Incremental state file: `data/bronze/weather/_state.json`.
+### Bronze (raw)
+- TLC files: `data/bronze/tlc/taxi_type=<yellow|green>/year=YYYY/month=MM/*.parquet`
+- Weather files: `data/bronze/weather/date=YYYY-MM-DD/weather.json`
+- Incremental weather state: `data/bronze/weather/_state.json`
 
-### Silver
-- `data/silver/trips/` (partitioned by `pickup_date`, `taxi_type`)
-  - Standardized trip schema with typed/cast columns.
-  - Adds `pickup_date` and `pickup_hour` for enrichment.
-- `data/silver/weather/` (partitioned by `date`)
-  - Typed hourly weather table (`timestamp`, `temperature_2m`, `precipitation`, `windspeed_10m`, `date`, `hour`).
-- `data/silver/enriched_trips/` (partitioned by `pickup_date`)
-  - Left join of trips to weather on `pickup_date == date` and `pickup_hour == hour`.
+### Silver (cleaned)
+- `data/silver/trips/`
+  - Standardized trip schema
+  - Adds `pickup_date` and `pickup_hour`
+- `data/silver/weather/`
+  - Typed hourly weather rows
+- `data/silver/enriched_trips/`
+  - Left join on `pickup_date == date` and `pickup_hour == hour`
 
-### Gold
+### Gold (analytics)
 - `data/gold/daily_metrics/date=YYYY-MM-DD/`
-  - Daily analytics-ready metrics:
-    - `total_trips`
-    - `avg_fare_amount`
-    - `avg_total_amount`
-    - `avg_trip_distance`
-    - `surge_proxy`
-    - `payment_type_counts`
-    - `avg_temp`
-    - `total_precip`
+- Metrics include trip volume, fare/amount averages, distance average, payment mix, and weather aggregates.
 
-## Cleaning Rules (Silver Trips)
-- Drop null pickup/dropoff timestamps.
-- Keep rows where `dropoff_datetime >= pickup_datetime`.
-- Enforce `trip_distance >= 0`.
-- Enforce `fare_amount >= 0`.
-- Deduplicate by business key:
-  - `vendor_id`, `pickup_datetime`, `dropoff_datetime`, `pu_location_id`, `do_location_id`, `total_amount`.
+## Cleaning rules in Silver trips
+- Drop rows with null pickup/dropoff timestamps
+- Keep rows where `dropoff_datetime >= pickup_datetime`
+- Keep rows where `trip_distance >= 0`
+- Keep rows where `fare_amount >= 0`
+- Deduplicate on:
+  - `vendor_id`, `pickup_datetime`, `dropoff_datetime`, `pu_location_id`, `do_location_id`, `total_amount`
 
-## Join & Time Alignment
-- Weather requests use `America/New_York`.
-- Spark session uses `America/New_York`.
-- Enrichment join key: `(pickup_date, pickup_hour)`.
+## Time alignment
+- Weather API timezone: `America/New_York`
+- Spark SQL session timezone: `America/New_York`
+- Join keys: `pickup_date`, `pickup_hour`
 
-## Execution Modes
-- `local`: PySpark local execution.
-- `docker`: Spark stages submitted to Docker Spark cluster (if available).
+## Run modes
+- `local`: all Spark work runs locally
+- `docker`: submits Spark stages to Docker Spark services when available

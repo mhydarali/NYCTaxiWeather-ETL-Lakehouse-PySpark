@@ -1,56 +1,58 @@
-# Run Evidence (Personal Project #2)
+# Run Evidence
 
-This file summarizes reproducible validation and output checks from the local sample run.
+This file records a reproducible local validation run for this project.
 
-## Validation Commands
+## Run context
+- Project path: `/Users/mhydarali/Documents/McGill/McGill_MMA/personal_project_2`
+- Execution date: February 22, 2026
+- Mode: local Spark
+
+## Commands used
 
 ```bash
 make sync
 make test
 make lint
-.venv/bin/python scripts/run_all.py --mode local --taxi-type yellow --start-month 2024-01 --end-month 2024-01 --weather-start-date 2024-01-01 --weather-end-date 2024-01-02
-.venv/bin/python scripts/inspect_outputs.py --sample-size 1
+make run
+.venv/bin/python scripts/inspect_outputs.py --sample-size 3
 ```
 
-## Validation Status
+## Validation status
 - `make sync`: PASS
-- `make test`: PASS (6 passed)
+- `make test`: PASS
 - `make lint`: PASS
-- End-to-end sample pipeline run: PASS (`pipeline completed`)
+- `make run`: PASS
+- `inspect_outputs.py`: PASS
 
-## Table Row Counts (from `inspect_outputs.py`)
+## Output counts from inspection
 - `silver.trips`: `2,927,120`
-- `silver.weather`: `48`
+- `silver.weather`: `72`
 - `silver.enriched_trips`: `2,927,120`
 - `gold.daily_metrics`: `35`
 
-## Output Partitions Found
+## Example partition paths observed
 
 ### `data/silver/trips`
-Example partition directories observed:
-- `pickup_date=2024-01-23/taxi_type=yellow`
-- `pickup_date=2024-01-24/taxi_type=yellow`
-- `pickup_date=2024-01-12/taxi_type=yellow`
+- `pickup_date=2024-01-01/taxi_type=yellow`
+- `pickup_date=2024-01-02/taxi_type=yellow`
+- `pickup_date=2024-01-17/taxi_type=yellow`
 
 ### `data/silver/weather`
 - `date=2024-01-01`
 - `date=2024-01-02`
-
-### `data/silver/enriched_trips`
-Example partition directories observed:
-- `pickup_date=2024-01-23`
-- `pickup_date=2024-01-24`
-- `pickup_date=2024-01-12`
-
-### `data/gold/daily_metrics`
-Example partition directories observed:
-- `date=2024-01-02`
-- `date=2024-01-05`
-- `date=2024-01-04`
 - `date=2024-01-03`
 
-## Gold Sample Output Columns
-From schema inspection:
+### `data/silver/enriched_trips`
+- `pickup_date=2024-01-01`
+- `pickup_date=2024-01-02`
+- `pickup_date=2024-01-17`
+
+### `data/gold/daily_metrics`
+- `date=2024-01-01`
+- `date=2024-01-02`
+- `date=2024-01-17`
+
+## Gold schema fields
 - `date`
 - `total_trips`
 - `avg_fare_amount`
@@ -61,16 +63,5 @@ From schema inspection:
 - `avg_temp`
 - `total_precip`
 
-## Known Warnings (Non-Fatal)
-### Spark MemoryManager row-group warnings
-During Parquet writes, Spark may log messages like:
-- `Total allocation exceeds 95% ... Scaling row group sizes ...`
-
-Interpretation:
-- Spark is reducing Parquet row-group size to stay within memory limits.
-- This is expected under heavy write pressure and did not cause job failure in this run.
-
-### RowBasedKeyValueBatch spill warnings
-Spark may log `Calling spill() ... Will not spill but return 0.`
-- Informational warning from aggregate internals.
-- The pipeline still completed successfully.
+## Notes on warnings
+Spark may print warnings like native Hadoop library messages or row-group memory scaling messages on macOS. In this run they were non-fatal and the pipeline completed successfully.

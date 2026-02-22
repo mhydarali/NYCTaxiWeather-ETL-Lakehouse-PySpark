@@ -1,82 +1,77 @@
-# Interview Talking Points — City Mobility Lakehouse
+# Interview Talking Points — NYC Taxi + Weather Lakehouse
 
-## 30-Second Pitch
-I built a local end-to-end data pipeline that combines a large public dataset (NYC taxi trips) with a public weather API, processes both through Bronze/Silver/Gold layers with Spark, and produces a daily analytics table. The project demonstrates batch ingestion, incremental API ingestion, Spark transformations, partitioned outputs, and data quality checks in a reproducible setup.
+## 30-second version
+I built a local end-to-end data pipeline that combines NYC taxi trips with hourly weather data. The pipeline ingests raw data, cleans and standardizes it in Spark, joins weather to trips, and outputs a Gold daily metrics table. I also added tests and quality checks so reruns are reliable.
 
-## 90-Second Walkthrough
-- I ingest monthly NYC TLC parquet files into a Bronze layer and fetch weather data from Open-Meteo incrementally using a state file.
-- In Silver, I standardize and clean trips (schema harmonization, invalid value filtering, deduplication) and normalize hourly weather into typed parquet.
-- I enrich trips with weather by aligning timezone and joining on pickup date plus pickup hour.
-- In Gold, I aggregate daily business metrics: total trips, fare and distance averages, payment-type breakdown, a deterministic surge proxy, and weather impact fields.
-- I added quality checks and tests so reruns are reliable and measurable.
+## 90-second walkthrough
+- Bronze:
+  - Download monthly TLC parquet files.
+  - Pull weather from Open-Meteo and track progress with a state file.
+- Silver:
+  - Standardize trip schema across TLC variations.
+  - Filter bad records and deduplicate.
+  - Normalize weather into typed hourly records.
+- Enrichment:
+  - Join on `pickup_date` + `pickup_hour` after timezone alignment.
+- Gold:
+  - Build daily metrics (trip volume, fare/distance averages, payment mix, weather fields).
+- Reliability:
+  - Run tests, lint, and quality checks from simple CLI commands.
 
-## 3-Minute Deep Dive
-### Business Problem
-Transportation analytics needs a reliable daily view of trip volume and pricing under different weather conditions. Raw files and API payloads are not analytics-ready.
+## 3-minute deep dive
+### Problem
+Taxi data is large and messy, and weather comes from a separate API. If analysts combine this manually, it is slow and error-prone.
 
-### Design
-- **Bronze** keeps raw data immutable and replayable.
-- **Silver** handles standardization and data quality before joins.
-- **Gold** provides a compact business-facing mart.
+### What I built
+A local medallion pipeline (`bronze -> silver -> gold`) with stage-specific scripts and clear contracts between layers.
 
-### Implementation Details
-- Batch ingestion uses resumable downloads (skip existing files).
-- API ingestion tracks progress with `data/bronze/weather/_state.json`.
-- Spark cleanup rules enforce deterministic filters and dedupe keys.
-- Enrichment join uses `pickup_date` + `pickup_hour` with timezone alignment (`America/New_York`).
-- Gold output is partitioned by `date` for efficient analytics reads.
+### Key technical points
+- Resumable batch ingestion for monthly parquet files
+- Incremental weather ingestion using `data/bronze/weather/_state.json`
+- Schema harmonization for TLC column variations
+- Spark transformations and partitioned parquet outputs
+- Deterministic enrichment join on hour-level keys
 
-### Validation
-- Automated checks: row count non-zero, null-rate thresholds, value ranges, and uniqueness.
-- Tests cover URL building, weather state logic, and Spark transforms.
-- Sample run produced 2.9M+ cleaned trip rows and a daily gold mart.
+### Evidence
+In a recent run:
+- `silver.trips`: 2,927,120 rows
+- `silver.weather`: 72 rows
+- `silver.enriched_trips`: 2,927,120 rows
+- `gold.daily_metrics`: 35 rows
 
-## STAR Story (Challenge: Schema Harmonization)
+## STAR example (schema differences)
 ### Situation
-TLC files vary by taxi type (yellow vs green), with different timestamp and location column names/casing.
+TLC input files vary by taxi type and can use different names for equivalent columns.
 
 ### Task
-Build one cleaning pipeline that works across schemas without fragile one-off branches.
+Create one transform that handles schema variation without brittle one-off logic.
 
 ### Action
-Implemented flexible column resolution in the Silver trips transform and casted all required fields into a unified schema before filtering/deduplication.
+I added column resolution and explicit type casting into a single target schema before filtering and deduplicating.
 
 ### Result
-A single Spark transform supports heterogeneous TLC inputs and consistently outputs a stable Silver schema for downstream joins and aggregations.
+The same Silver trips job can process heterogeneous TLC inputs and produce a stable downstream contract.
 
-## Top 10 Interview Questions + Concise Answers
-1. **Why Bronze/Silver/Gold?**
-   It separates raw ingestion, cleanup, and business analytics concerns for traceability and reliability.
+## Questions I expect in interviews
+1. Why use Bronze/Silver/Gold?
+It separates raw ingestion, cleanup, and analytics logic so debugging and reprocessing are easier.
 
-2. **How is ingestion idempotent?**
-   TLC skips existing non-empty files; weather ingestion uses a last-ingested state file.
+2. How do you make ingestion idempotent?
+TLC download skips existing files; weather ingestion records last ingested date in a state file.
 
-3. **How do you handle schema drift?**
-   Column lookup/normalization in Silver trips maps variant source columns to a stable target schema.
+3. How do you handle schema drift?
+I resolve known source column variants and cast to a canonical Silver schema.
 
-4. **How do you ensure join correctness?**
-   Same timezone for API and Spark session; join keys are pickup date and pickup hour.
+4. How do you validate joins?
+Both sources use `America/New_York`; join keys are `pickup_date` and `pickup_hour`.
 
-5. **What quality checks are included?**
-   Non-zero counts, null-rate thresholds, value-range rules, and uniqueness checks.
+5. What quality checks are included?
+Non-empty outputs, null-rate thresholds, range checks, and uniqueness checks.
 
-6. **What makes it scalable?**
-   Spark processing + partitioned parquet outputs by business-relevant date keys.
+6. What would you improve next?
+Scheduling, alerting, and a cloud deployment target while keeping the same layer contracts.
 
-7. **How do you test without external dependencies?**
-   Mocked API sessions and small in-memory Spark DataFrames for transform tests.
-
-8. **What is one tradeoff you made?**
-   Kept checks lightweight and dependency-minimal instead of integrating a heavier framework.
-
-9. **What would you improve next?**
-   Add orchestrator scheduling, monitoring/alerts, and cloud object storage target.
-
-10. **How does this map to a junior DE role?**
-    It demonstrates practical ingestion, transformation, testing, and data quality workflows used in production teams.
-
-## What I Would Improve Next
-- Add scheduled orchestration with retry policies.
-- Add data freshness and pipeline SLA monitoring.
-- Add downstream dashboard layer for business users.
-- Add cloud deployment variant (S3 + managed Spark) while preserving same layer contracts.
+## Honest next steps
+- Add orchestrated scheduling and retry logic
+- Add freshness/SLA alerts
+- Add a small dashboard query layer for business users

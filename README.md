@@ -1,72 +1,54 @@
-# City Mobility Lakehouse (Local-First Portfolio Project)
+# NYC Taxi + Weather Lakehouse (Local-First Data Engineering Project)
 
-## Executive Summary (Non-Technical)
-This project automates how a transportation team would turn raw taxi and weather data into daily business metrics. Instead of manual spreadsheet work, the pipeline runs end-to-end and produces a clean daily table that can support operational planning, demand analysis, and pricing discussions.
+## What this project is
+I built this repo as an interview-ready data engineering project that runs fully on a laptop.
+It covers the full path from raw data to analytics outputs:
+- Batch ingestion of NYC TLC trip parquet files
+- Incremental API ingestion from Open-Meteo
+- Spark transformations across Bronze/Silver/Gold layers
+- Data quality checks and tests
+- Reproducible run evidence in docs
 
-## Problem Statement
-Urban mobility teams need a reliable way to understand daily taxi demand and pricing behavior under changing weather conditions. Raw trip files and weather API payloads are messy, live in different formats, and are not analytics-ready.
+The implementation is local-first (filesystem + local Spark), but the layer design is the same pattern used in cloud data stacks.
 
-## Goal
-Build a complete end-to-end data pipeline that ingests a large public dataset (NYC TLC trips) and a public API (Open-Meteo weather), processes them through Bronze/Silver/Gold layers with Spark, and produces an analytics-ready daily metrics table.
+## Business question
+How do daily NYC taxi demand and pricing metrics change with weather conditions?
 
-## Sector / Use Case
-Transportation analytics, city operations, and mobility demand planning.
+## Data sources
+- NYC TLC trip records: [NYC TLC](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)
+- Open-Meteo archive API: [Open-Meteo Docs](https://open-meteo.com/en/docs)
 
-## Why This Matters
-Without a structured pipeline, analysts spend time manually downloading files, cleaning schema mismatches, and joining hourly weather to trip timestamps. This project automates that workflow so teams can focus on decisions, not data wrangling.
-
-## Local-First, Cloud-Transferable
-This repository is intentionally designed to run locally (Python + Spark + local filesystem) while using engineering patterns directly transferable to cloud data platforms:
-- Medallion architecture (Bronze/Silver/Gold)
-- Partitioned Parquet outputs
-- Incremental ingestion state tracking
-- Data quality checks
-- Orchestration-ready stage entrypoints
-
-## Architecture Overview
-
+## Pipeline architecture
 ```mermaid
 flowchart TD
-    A["NYC TLC Parquet (monthly)"] --> B["bronze_tlc.py\nBronze TLC\ndata/bronze/tlc/"]
-    C["Open-Meteo API (hourly)"] --> D["bronze_weather.py\nBronze Weather\ndata/bronze/weather/"]
+    A["NYC TLC Parquet (monthly)"] --> B["Bronze TLC\nscripts/bronze_tlc.py\ndata/bronze/tlc/"]
+    C["Open-Meteo API (hourly)"] --> D["Bronze Weather\nscripts/bronze_weather.py\ndata/bronze/weather/"]
 
-    B --> E["silver_trips.py\nSilver Trips\ndata/silver/trips/"]
-    D --> F["silver_weather.py\nSilver Weather\ndata/silver/weather/"]
+    B --> E["Silver Trips\nscripts/silver_trips.py\ndata/silver/trips/"]
+    D --> F["Silver Weather\nscripts/silver_weather.py\ndata/silver/weather/"]
 
-    E --> G["silver_enriched.py\nSilver Enriched Trips\ndata/silver/enriched_trips/"]
+    E --> G["Silver Enriched\nscripts/silver_enriched.py\ndata/silver/enriched_trips/"]
     F --> G
 
-    G --> H["gold_daily_metrics.py\nGold Daily Metrics\ndata/gold/daily_metrics/"]
-    H --> I["run_quality.py\nQuality Checks"]
+    G --> H["Gold Daily Metrics\nscripts/gold_daily_metrics.py\ndata/gold/daily_metrics/"]
+    H --> I["Quality Checks\nscripts/run_quality.py"]
 ```
 
-## Visuals
-- Architecture diagram: Mermaid flow in this README.
-- Detailed architecture reference: `docs/architecture.md`
-- Reproducible run outputs and partition evidence: `docs/run_evidence.md`
-- Interview walkthrough assets: `docs/interview_talking_points.md`
-
-## Data Source, Transformation & Output
-### Data Sources
-- NYC TLC Trip Records: [NYC TLC](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)
-- Open-Meteo Archive API: [Open-Meteo Docs](https://open-meteo.com/en/docs)
-
-### Transformation
+## What each layer contains
 - Bronze:
-  - Raw TLC parquet downloaded by month.
-  - Raw weather JSON ingested by day with incremental state file.
+  - Raw monthly TLC parquet files
+  - Raw daily weather JSON + ingestion state file (`_state.json`)
 - Silver:
-  - Trips standardized and cleaned (timestamps, ranges, dedupe).
-  - Weather normalized into typed hourly parquet.
-  - Trips enriched with weather using pickup date + pickup hour.
+  - `trips`: cleaned and standardized trip rows
+  - `weather`: typed hourly weather rows
+  - `enriched_trips`: trips joined to weather on pickup date/hour
 - Gold:
-  - Daily metrics mart with trip volume, fare averages, distance averages, surge proxy, payment mix, and weather impact fields.
+  - `daily_metrics`: business-facing daily aggregates
 
-### Final Output Location
-- `data/gold/daily_metrics/date=YYYY-MM-DD/`
+## Quick start
+Run from `/Users/mhydarali/Documents/McGill/McGill_MMA/personal_project_2`.
 
-## Pipeline Execution (Step-by-Step)
-1. Sync dependencies:
+1. Install dependencies:
 ```bash
 make sync
 ```
@@ -78,16 +60,16 @@ make test
 ```bash
 make lint
 ```
-4. Run full pipeline locally:
+4. Run the full pipeline:
 ```bash
 make run
 ```
-5. Inspect outputs (schema, row counts, sample rows):
+5. Inspect outputs:
 ```bash
 .venv/bin/python scripts/inspect_outputs.py --sample-size 3
 ```
 
-### Optional: Custom Small Run
+## Custom run (small window)
 ```bash
 .venv/bin/python scripts/run_all.py \
   --mode local \
@@ -98,32 +80,25 @@ make run
   --weather-end-date 2024-01-02
 ```
 
-## Results
-From a sample run (January 2024 yellow taxi + two weather days ingested):
+## Latest run snapshot
+From a local run inspected on February 22, 2026:
 - `silver.trips`: 2,927,120 rows
-- `silver.weather`: 48 rows
+- `silver.weather`: 72 rows (3 weather days x 24 hours)
 - `silver.enriched_trips`: 2,927,120 rows
-- `gold.daily_metrics`: 35 daily records
-- Quality checks: Passed in pipeline run (`run_all.py` completed successfully)
+- `gold.daily_metrics`: 35 rows
 
-See full reproducible evidence in `docs/run_evidence.md`.
+Note: if you rerun without clearing data folders, older partitions may remain from previous runs.
 
-## Skills Demonstrated
-- Batch ingestion of large parquet datasets (TLC monthly files)
-- Incremental API ingestion with checkpoint state (`_state.json`)
-- Spark-based cleaning, schema standardization, deduplication, joins, and aggregations
-- Bronze/Silver/Gold data modeling with partitioned parquet outputs
-- Lightweight data quality validation (row count, null thresholds, ranges, uniqueness)
-- Orchestration-ready CLI entrypoints and end-to-end runner
-- Automated testing (including mocked API behavior)
+## Data quality and testing
+- Quality checks include non-empty outputs, null-rate checks, range checks, and dedup/uniqueness rules.
+- Unit tests cover ingestion helpers, weather state handling, and Spark transforms.
 
-## Learnings
-- Real-world datasets require flexible schema harmonization (column name drift, type casting).
-- Time alignment (timezone + hourly join keys) is critical for correct enrichment.
-- Incremental ingestion state prevents unnecessary API calls and supports safe reruns.
-- Spark warnings under memory pressure can be non-fatal when writes are still successful.
+## Design choices and tradeoffs
+- Kept dependencies lightweight for easy local setup.
+- Used partitioned parquet instead of a warehouse table format to keep the project simple and portable.
+- Used deterministic join keys (`pickup_date`, `pickup_hour`) and aligned both sources to `America/New_York`.
 
-## Repository Structure
+## Repository layout
 ```text
 src/mobility_lakehouse/
   config.py
@@ -131,15 +106,14 @@ src/mobility_lakehouse/
   quality/
   utils/
 scripts/
-notebooks/
 docs/
+notebooks/
 tests/
-requirements.txt
-data/{bronze,silver,gold}
-logs/
 ```
 
-## Interview Prep Assets
+## Supporting docs
 - Architecture details: `docs/architecture.md`
-- Run evidence/proof pack: `docs/run_evidence.md`
-- Talking points and Q&A: `docs/interview_talking_points.md`
+- Data source notes: `docs/data_sources.md`
+- Reproducible run evidence: `docs/run_evidence.md`
+- Interview prep notes: `docs/interview_talking_points.md`
+- One-page command sheet: `docs/one_page_cheatsheet.md`
